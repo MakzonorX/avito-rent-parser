@@ -340,3 +340,216 @@ pollLogs();
 setInterval(refreshStatus, 3000);
 setInterval(pollLogs, 2000);
 setInterval(loadRecent, 15000);
+
+/* ================================================ мастер настройки */
+const wizard = {
+  el: $('wizard'),
+  step: 1,
+  total: 5,
+
+  open(step = 1) {
+    this.el.classList.remove('hidden');
+    this.goto(step);
+  },
+
+  close() {
+    this.el.classList.add('hidden');
+  },
+
+  goto(step) {
+    this.step = Math.min(Math.max(step, 1), this.total);
+    document.querySelectorAll('.wizard-step').forEach((el) => {
+      el.classList.toggle('active', Number(el.dataset.step) === this.step);
+    });
+    document.querySelectorAll('.wizard-dot').forEach((dot) => {
+      const n = Number(dot.dataset.step);
+      dot.classList.toggle('current', n === this.step);
+      dot.classList.toggle('done', n < this.step);
+    });
+    if (this.step === 5) this.renderSummary();
+    this.el.scrollTop = 0;
+  },
+
+  next() { this.goto(this.step + 1); },
+  back() { this.goto(this.step - 1); },
+
+  result(id, kind, title, hint = '') {
+    const el = $(id);
+    el.className = `wizard-result filled ${kind}`;
+    el.innerHTML = `<b>${title}</b>${hint ? `<span class="hint">${hint}</span>` : ''}`;
+  },
+
+  async prefill() {
+    const { ok, data } = await api('/api/settings');
+    if (!ok) return;
+    const { avito, rent, presets } = data;
+
+    $('wz_tg_token').value = avito.tg_token || '';
+    $('wz_tg_chat_id').value = listToLines(avito.tg_chat_id);
+    $('wz_proxy_string').value = avito.proxy_string || '';
+    $('wz_url').value = listToLines(avito.urls);
+    $('wz_min_price').value = avito.min_price;
+    $('wz_max_price').value = avito.max_price;
+    $('wz_pause').value = avito.pause_general;
+    $('wz_max_age').value = Math.round((avito.max_age || 0) / 3600);
+
+    const select = $('wz_preset');
+    select.innerHTML = '';
+    Object.entries(presets).forEach(([name, url]) => {
+      const option = document.createElement('option');
+      option.value = url;
+      option.textContent = name;
+      select.appendChild(option);
+    });
+    const own = document.createElement('option');
+    own.value = '';
+    own.textContent = 'Своя ссылка (вставить ниже)';
+    select.appendChild(own);
+
+    const rooms = (rent.rooms || []).map(Number);
+    document.querySelectorAll('#wz-rooms input').forEach((box) => {
+      box.checked = rooms.includes(Number(box.value));
+    });
+  },
+
+  collectSearch() {
+    return {
+      avito: {
+        urls: linesToList($('wz_url').value),
+        min_price: $('wz_min_price').value || 0,
+        max_price: $('wz_max_price').value || 99999999,
+        pause_general: $('wz_pause').value || 300,
+        max_age: Number($('wz_max_age').value || 0) * 3600,
+      },
+      rent: {
+        rooms: [...document.querySelectorAll('#wz-rooms input:checked')].map((b) => Number(b.value)),
+      },
+    };
+  },
+
+  renderSummary() {
+    const search = this.collectSearch();
+    const token = $('wz_tg_token').value.trim();
+    const chats = linesToList($('wz_tg_chat_id').value);
+    const roomsLabel = search.rent.rooms.length
+      ? search.rent.rooms.map((r) => (r === 0 ? 'студия' : `${r}-комн.`)).join(', ')
+      : 'любая';
+    const proxy = $('wz_proxy_string').value.trim();
+
+    const rows = [
+      ['Telegram', token && chats.length ? `настроен, получателей: ${chats.length}` : 'не настроен — уведомлений не будет'],
+      ['Прокси', proxy || 'без прокси'],
+      ['Цена', `${Number(search.avito.min_price).toLocaleString('ru-RU')} — ${Number(search.avito.max_price).toLocaleString('ru-RU')} ₽/мес`],
+      ['Комнатность', roomsLabel],
+      ['Проверка', `раз в ${search.avito.pause_general} сек.`],
+      ['Свежесть', `не старше ${Math.round(search.avito.max_age / 3600)} ч.`],
+    ];
+    $('wz-summary').innerHTML = rows
+      .map(([key, value]) => `<div class="wizard-summary-row"><span>${key}</span><span>${escapeHtml(value)}</span></div>`)
+      .join('');
+  },
+};
+
+/* --- навигация --- */
+document.querySelectorAll('[data-wizard]').forEach((btn) => {
+  btn.addEventListener('click', async () => {
+    const action = btn.dataset.wizard;
+    if (action === 'next') {
+      if (wizard.step === 4) {
+        const payload = wizard.collectSearch();
+        const { ok } = await api('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
+        if (!ok) return toast('Не удалось сохранить настройки', 'error');
+      }
+      wizard.next();
+    } else if (action === 'back') {
+      wizard.back();
+    } else if (action === 'skip-step') {
+      wizard.next();
+    } else if (action === 'skip') {
+      await api('/api/onboarding/complete', { method: 'POST' });
+      wizard.close();
+      toast('Мастер можно открыть кнопкой 🧭 в шапке');
+    }
+  });
+});
+
+$('btn-wizard').onclick = async () => {
+  await wizard.prefill();
+  wizard.open(1);
+};
+
+/* --- шаг Telegram --- */
+$('wz-tg-check').onclick = async () => {
+  const token = $('wz_tg_token').value.trim();
+  const chats = linesToList($('wz_tg_chat_id').value);
+  if (!token || !chats.length) {
+    return wizard.result('wz-tg-result', 'fail', 'Заполни оба поля',
+      'Нужен и токен бота, и chat_id получателя.');
+  }
+
+  wizard.result('wz-tg-result', '', 'Отправляю тестовое сообщение...');
+  await api('/api/settings', {
+    method: 'POST',
+    body: JSON.stringify({ avito: { tg_token: token, tg_chat_id: chats } }),
+  });
+
+  const { ok, data } = await api('/api/telegram/test', { method: 'POST' });
+  if (ok) {
+    wizard.result('wz-tg-result', 'ok', '✅ Сообщение отправлено',
+      'Проверь чат — там должно быть подтверждение от бота.');
+    setTimeout(() => wizard.next(), 1400);
+  } else {
+    wizard.result('wz-tg-result', 'fail', '❌ Не получилось',
+      `${escapeHtml(data.message || '')}<br>Частая причина: боту ещё не написали первым, или chat_id указан неверно.`);
+  }
+};
+
+/* --- шаг доступа к Avito --- */
+$('wz-avito-check').onclick = async () => {
+  const proxy = $('wz_proxy_string').value.trim();
+  wizard.result('wz-avito-result', '', 'Проверяю доступ, это займёт несколько секунд...');
+
+  const { data } = await api('/api/check-avito', {
+    method: 'POST',
+    body: JSON.stringify({ proxy_string: proxy }),
+  });
+
+  const where = [data.ip, data.location, data.org].filter(Boolean).join(' · ');
+  if (data.ok) {
+    wizard.result('wz-avito-result', 'ok', '✅ Avito отвечает, доступ есть', escapeHtml(where));
+    await api('/api/settings', { method: 'POST', body: JSON.stringify({ avito: { proxy_string: proxy } }) });
+    setTimeout(() => wizard.next(), 1400);
+  } else {
+    wizard.result('wz-avito-result', 'fail', `❌ ${escapeHtml(data.message)}`,
+      `${escapeHtml(where)}<br><br>${escapeHtml(data.hint)}`);
+    $('wz-proxy-field').classList.remove('hidden');
+  }
+};
+
+/* --- финиш --- */
+$('wz-finish').onclick = async () => {
+  const payload = wizard.collectSearch();
+  payload.avito.tg_token = $('wz_tg_token').value.trim();
+  payload.avito.tg_chat_id = linesToList($('wz_tg_chat_id').value);
+  payload.avito.proxy_string = $('wz_proxy_string').value.trim();
+
+  const saved = await api('/api/settings', { method: 'POST', body: JSON.stringify(payload) });
+  if (!saved.ok) return toast('Не удалось сохранить настройки', 'error');
+
+  await api('/api/onboarding/complete', { method: 'POST' });
+  const { data } = await api('/api/start', { method: 'POST' });
+
+  wizard.close();
+  loadSettings();
+  refreshStatus();
+  toast(data.ok ? 'Парсер запущен — следи за дашбордом' : data.message, 'success');
+};
+
+/* --- показать мастер при первом входе --- */
+(async () => {
+  const { ok, data } = await api('/api/settings');
+  if (ok && data.app && !data.app.onboarding_done) {
+    await wizard.prefill();
+    wizard.open(1);
+  }
+})();

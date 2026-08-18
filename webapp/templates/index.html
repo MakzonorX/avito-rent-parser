@@ -21,6 +21,7 @@
     <button id="btn-start" class="btn btn-primary">▶ Запустить</button>
     <button id="btn-stop" class="btn btn-danger hidden">⏹ Остановить</button>
     <button id="btn-check" class="btn">🔄 Проверить сейчас</button>
+    <button id="btn-wizard" class="btn" title="Мастер настройки">🧭</button>
   </div>
 </header>
 
@@ -201,6 +202,141 @@
     <pre id="logs-box" class="logs"></pre>
   </section>
 </main>
+
+
+<!-- ============ МАСТЕР НАСТРОЙКИ ============ -->
+<div id="wizard" class="wizard hidden">
+  <div class="wizard-card">
+    <div class="wizard-progress">
+      <div class="wizard-dot" data-step="1"></div>
+      <div class="wizard-dot" data-step="2"></div>
+      <div class="wizard-dot" data-step="3"></div>
+      <div class="wizard-dot" data-step="4"></div>
+      <div class="wizard-dot" data-step="5"></div>
+    </div>
+
+    <!-- шаг 1 -->
+    <div class="wizard-step" data-step="1">
+      <div class="wizard-icon">🏠</div>
+      <h2>Настроим парсер аренды</h2>
+      <p class="wizard-lead">
+        Парсер следит за новыми объявлениями об аренде квартир на Avito и присылает
+        подходящие в Telegram — с фотографиями, параметрами и ссылкой.
+      </p>
+      <div class="wizard-list">
+        <div class="wizard-list-item"><span>1</span><div><b>Telegram-бот</b><br><span class="hint">куда будут приходить объявления — сделаем за пару минут</span></div></div>
+        <div class="wizard-list-item"><span>2</span><div><b>Доступ к Avito</b><br><span class="hint">проверим, пускает ли Avito с твоего адреса</span></div></div>
+        <div class="wizard-list-item"><span>3</span><div><b>Что искать</b><br><span class="hint">город, цена, комнатность</span></div></div>
+      </div>
+      <div class="wizard-actions">
+        <button class="btn btn-link" data-wizard="skip">Пропустить, настрою сам</button>
+        <button class="btn btn-primary" data-wizard="next">Начать →</button>
+      </div>
+    </div>
+
+    <!-- шаг 2 -->
+    <div class="wizard-step" data-step="2">
+      <h2>Шаг 1. Telegram-бот</h2>
+      <p class="wizard-lead">Бот будет присылать тебе новые объявления.</p>
+      <ol class="wizard-steps-list">
+        <li>Открой <a href="https://t.me/BotFather" target="_blank">@BotFather</a> и отправь <code>/newbot</code></li>
+        <li>Придумай имя бота — в ответ придёт токен, скопируй его сюда</li>
+      </ol>
+      <div class="field">
+        <label>Токен бота</label>
+        <input type="text" id="wz_tg_token" placeholder="123456789:AAE-xxxxxxxxxxxxxxxxxxxxxxxx" spellcheck="false">
+      </div>
+      <ol class="wizard-steps-list" start="3">
+        <li>Узнай свой ID у <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a></li>
+        <li><b>Напиши своему боту любое сообщение</b> — без этого он не сможет тебе ответить</li>
+      </ol>
+      <div class="field">
+        <label>Твой Chat ID <span class="hint">(несколько получателей — по одному в строке)</span></label>
+        <textarea id="wz_tg_chat_id" rows="2" placeholder="123456789" spellcheck="false"></textarea>
+      </div>
+      <div id="wz-tg-result" class="wizard-result"></div>
+      <div class="wizard-actions">
+        <button class="btn btn-link" data-wizard="back">← Назад</button>
+        <div class="wizard-actions-right">
+          <button class="btn" data-wizard="skip-step">Пропустить</button>
+          <button class="btn btn-primary" id="wz-tg-check">Проверить связь</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- шаг 3 -->
+    <div class="wizard-step" data-step="3">
+      <h2>Шаг 2. Доступ к Avito</h2>
+      <p class="wizard-lead">
+        Avito пускает только российские IP-адреса. Проверим, что видит Avito с твоей стороны.
+      </p>
+      <div id="wz-avito-result" class="wizard-result"></div>
+      <div class="field hidden" id="wz-proxy-field">
+        <label>Российский прокси <span class="hint">user:pass@ip:port — формат распознаётся автоматически</span></label>
+        <input type="text" id="wz_proxy_string" placeholder="user:pass@1.2.3.4:8000" spellcheck="false">
+      </div>
+      <div class="wizard-actions">
+        <button class="btn btn-link" data-wizard="back">← Назад</button>
+        <div class="wizard-actions-right">
+          <button class="btn" data-wizard="skip-step">Продолжить всё равно</button>
+          <button class="btn btn-primary" id="wz-avito-check">Проверить доступ</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- шаг 4 -->
+    <div class="wizard-step" data-step="4">
+      <h2>Шаг 3. Что искать</h2>
+      <p class="wizard-lead">Базовые условия — потом можно поменять в настройках.</p>
+      <div class="field">
+        <label>Поиск на Avito</label>
+        <select id="wz_preset"></select>
+        <div class="hint">Своя ссылка: настрой поиск на avito.ru, включи сортировку «по дате» и вставь адрес ниже.</div>
+      </div>
+      <div class="field">
+        <label>Ссылка</label>
+        <textarea id="wz_url" rows="2" spellcheck="false"></textarea>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>Цена от, ₽/мес</label><input type="number" id="wz_min_price" min="0"></div>
+        <div class="field"><label>Цена до, ₽/мес</label><input type="number" id="wz_max_price" min="0"></div>
+      </div>
+      <div class="field">
+        <label>Комнатность <span class="hint">(ничего не отмечено — любая)</span></label>
+        <div class="checks" id="wz-rooms">
+          <label><input type="checkbox" value="0"> Студия</label>
+          <label><input type="checkbox" value="1"> 1-комн.</label>
+          <label><input type="checkbox" value="2"> 2-комн.</label>
+          <label><input type="checkbox" value="3"> 3-комн.</label>
+          <label><input type="checkbox" value="4"> 4-комн.</label>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>Проверять раз в, секунд</label><input type="number" id="wz_pause" min="60"></div>
+        <div class="field"><label>Объявления не старше, часов</label><input type="number" id="wz_max_age" min="0"></div>
+      </div>
+      <div class="wizard-actions">
+        <button class="btn btn-link" data-wizard="back">← Назад</button>
+        <button class="btn btn-primary" data-wizard="next">Дальше →</button>
+      </div>
+    </div>
+
+    <!-- шаг 5 -->
+    <div class="wizard-step" data-step="5">
+      <div class="wizard-icon">✅</div>
+      <h2>Всё готово</h2>
+      <div id="wz-summary" class="wizard-summary"></div>
+      <div class="notice">
+        При первом запуске парсер молча запомнит объявления, которые уже висят на Avito,
+        чтобы не завалить чат сразу полусотней сообщений. В Telegram придут только новые.
+      </div>
+      <div class="wizard-actions">
+        <button class="btn btn-link" data-wizard="back">← Назад</button>
+        <button class="btn btn-primary" id="wz-finish">🚀 Запустить парсер</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <div id="toast" class="toast"></div>
 <script src="/static/app.js"></script>

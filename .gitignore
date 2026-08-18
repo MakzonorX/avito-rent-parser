@@ -2,6 +2,7 @@
 .secret.txt
 
 # локальное окружение и данные
+data/
 .venv/
 storage/
 database.db

@@ -263,6 +263,50 @@ def test_first_run_is_silent():
     print("✓ тёплый старт без уведомлений")
 
 
+def test_proxy_normalization():
+    """Прокси вводят в разных форматах — приводим к тому, что понимают http-клиенты."""
+    from webapp.proxy_utils import normalize_proxy
+
+    expected = "user:pass@1.2.3.4:8000"
+    for raw in [
+        "user:pass@1.2.3.4:8000",
+        "1.2.3.4:8000@user:pass",
+        "1.2.3.4:8000:user:pass",
+        "user:pass:1.2.3.4:8000",
+        "http://user:pass@1.2.3.4:8000",
+        "  user:pass@1.2.3.4:8000  ",
+    ]:
+        assert normalize_proxy(raw) == expected, f"{raw} → {normalize_proxy(raw)}"
+
+    assert normalize_proxy("1.2.3.4:8000") == "1.2.3.4:8000", "прокси без авторизации"
+    assert normalize_proxy("") == ""
+    print("✓ нормализация прокси")
+
+
+def test_onboarding_flag_persists():
+    """Флаг пройденного мастера должен переживать сохранение настроек."""
+    from webapp import settings
+
+    original = settings.CONFIG_PATH
+    settings.CONFIG_PATH = Path("storage/test_config.toml")
+    try:
+        settings.save(avito={"max_price": 40000}, rent={}, app={"onboarding_done": True})
+        raw = settings.load_raw()
+        assert raw["app"]["onboarding_done"] is True
+        assert raw["avito"]["max_price"] == 40000
+
+        # сохранение других настроек не сбрасывает флаг
+        settings.save(avito={"min_price": 10000}, rent={})
+        raw = settings.load_raw()
+        assert raw["app"]["onboarding_done"] is True, "флаг мастера потерялся"
+        assert raw["avito"]["max_price"] == 40000, "прежние настройки затёрлись"
+        print("✓ состояние мастера сохраняется")
+    finally:
+        if settings.CONFIG_PATH.exists():
+            settings.CONFIG_PATH.unlink()
+        settings.CONFIG_PATH = original
+
+
 if __name__ == "__main__":
     tests = [v for k, v in sorted(globals().items()) if k.startswith("test_")]
     for test in tests:

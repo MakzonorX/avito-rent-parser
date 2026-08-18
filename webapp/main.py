@@ -11,7 +11,7 @@ from loguru import logger
 
 from integrations.notifications.telegram_rent import RentTelegramNotifier
 from integrations.notifications.utils import escape_markdown_v2
-from webapp import cookies_tool, logbuf, settings, store
+from webapp import cookies_tool, diagnostics, logbuf, settings, store
 from webapp.runner import runner
 
 BASE_DIR = Path(__file__).parent
@@ -70,14 +70,23 @@ def api_check_now():
 @app.get("/api/settings")
 def api_get_settings():
     raw = settings.load_raw()
-    return {"avito": raw["avito"], "rent": raw["rent"], "presets": settings.PRESETS}
+    return {
+        "avito": raw["avito"],
+        "rent": raw["rent"],
+        "app": raw["app"],
+        "presets": settings.PRESETS,
+    }
 
 
 @app.post("/api/settings")
 async def api_save_settings(request: Request):
     payload = await request.json()
     try:
-        settings.save(avito=payload.get("avito") or {}, rent=payload.get("rent") or {})
+        settings.save(
+            avito=payload.get("avito") or {},
+            rent=payload.get("rent") or {},
+            app=payload.get("app") or {},
+        )
     except Exception as err:
         logger.error(f"Ошибка сохранения настроек: {err}")
         return JSONResponse({"ok": False, "message": str(err)}, status_code=400)
@@ -164,3 +173,28 @@ async def api_cookies_import(request: Request):
     except ValueError as err:
         return JSONResponse({"ok": False, "message": str(err)}, status_code=400)
     return {"ok": True, "message": f"Импортировано {count} cookies"}
+
+
+# ---------------------------------------------------------------- мастер настройки
+
+@app.post("/api/check-avito")
+async def api_check_avito(request: Request):
+    """Проверяет, пускает ли Avito с текущего IP (или через указанный прокси)."""
+    payload = await request.json() if await request.body() else {}
+    proxy = payload.get("proxy_string")
+    if proxy is None:
+        avito_config, _ = settings.load()
+        proxy = avito_config.proxy_string or ""
+    return diagnostics.check_access(proxy_string=proxy)
+
+
+@app.post("/api/onboarding/complete")
+def api_onboarding_complete():
+    settings.save(avito={}, rent={}, app={"onboarding_done": True})
+    return {"ok": True}
+
+
+@app.post("/api/onboarding/reset")
+def api_onboarding_reset():
+    settings.save(avito={}, rent={}, app={"onboarding_done": False})
+    return {"ok": True}

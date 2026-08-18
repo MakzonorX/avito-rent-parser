@@ -12,6 +12,7 @@ from loguru import logger
 
 from dto import AvitoConfig
 from rent.config import RentConfig
+from webapp.proxy_utils import normalize_proxy
 
 CONFIG_PATH = Path("config.toml")
 
@@ -60,6 +61,10 @@ DEFAULT_AVITO = {
     "block_threshold": 3,
 }
 
+DEFAULT_APP = {
+    "onboarding_done": False,
+}
+
 _AVITO_FIELDS = {f.name: f for f in fields(AvitoConfig)}
 _RENT_FIELDS = {f.name: f for f in fields(RentConfig)}
 
@@ -92,17 +97,18 @@ def _coerce(value: Any, target_type: str, default: Any) -> Any:
 
 def load_raw() -> dict:
     if not CONFIG_PATH.exists():
-        return {"avito": dict(DEFAULT_AVITO), "rent": RentConfig().as_dict()}
+        return {"avito": dict(DEFAULT_AVITO), "rent": RentConfig().as_dict(), "app": dict(DEFAULT_APP)}
     try:
         with CONFIG_PATH.open("rb") as f:
             data = tomllib.load(f)
     except (OSError, tomllib.TOMLDecodeError) as err:
         logger.error(f"Не удалось прочитать config.toml: {err}. Использую значения по умолчанию")
-        return {"avito": dict(DEFAULT_AVITO), "rent": RentConfig().as_dict()}
+        return {"avito": dict(DEFAULT_AVITO), "rent": RentConfig().as_dict(), "app": dict(DEFAULT_APP)}
 
     avito = {**DEFAULT_AVITO, **(data.get("avito") or {})}
     rent = {**RentConfig().as_dict(), **(data.get("rent") or {})}
-    return {"avito": avito, "rent": rent}
+    app = {**DEFAULT_APP, **(data.get("app") or {})}
+    return {"avito": avito, "rent": rent, "app": app}
 
 
 def load() -> tuple[AvitoConfig, RentConfig]:
@@ -112,7 +118,7 @@ def load() -> tuple[AvitoConfig, RentConfig]:
     return AvitoConfig(**avito_kwargs), RentConfig(**rent_kwargs)
 
 
-def save(avito: dict, rent: dict) -> None:
+def save(avito: dict, rent: dict, app: dict | None = None) -> None:
     """Пишет config.toml атомарно, сохраняя типы полей."""
     current = load_raw()
 
@@ -121,7 +127,10 @@ def save(avito: dict, rent: dict) -> None:
         if key not in _AVITO_FIELDS:
             continue
         field = _AVITO_FIELDS[key]
-        avito_out[key] = _coerce(value, str(field.type), current["avito"].get(key))
+        value = _coerce(value, str(field.type), current["avito"].get(key))
+        if key in ("proxy_string", "proxy_notifier"):
+            value = normalize_proxy(value)
+        avito_out[key] = value
 
     rent_out = dict(current["rent"])
     for key, value in rent.items():
@@ -135,7 +144,13 @@ def save(avito: dict, rent: dict) -> None:
     avito_out.pop("purchase_cooldown", None)
     avito_out.pop("output_dir", None)
 
-    payload = {"avito": avito_out, "rent": rent_out}
+    app_out = dict(current["app"])
+    for key, value in (app or {}).items():
+        if key in DEFAULT_APP:
+            app_out[key] = bool(value) if isinstance(DEFAULT_APP[key], bool) else value
+
+    payload = {"avito": avito_out, "rent": rent_out, "app": app_out}
+    CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     temp_path = CONFIG_PATH.with_suffix(".toml.tmp")
     with temp_path.open("wb") as f:
         tomli_w.dump(payload, f)
