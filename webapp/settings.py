@@ -12,7 +12,7 @@ from loguru import logger
 
 from dto import AvitoConfig
 from rent.config import RentConfig
-from webapp.proxy_utils import normalize_proxy
+from proxy_utils import normalize_proxy
 
 CONFIG_PATH = Path("config.toml")
 

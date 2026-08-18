@@ -265,7 +265,7 @@ def test_first_run_is_silent():
 
 def test_proxy_normalization():
     """Прокси вводят в разных форматах — приводим к тому, что понимают http-клиенты."""
-    from webapp.proxy_utils import normalize_proxy
+    from proxy_utils import normalize_proxy
 
     expected = "user:pass@1.2.3.4:8000"
     for raw in [
@@ -287,7 +287,7 @@ def test_proxy_normalization():
 
 def test_proxy_schemes():
     """SOCKS5-прокси должен сохранять свою схему, а не превращаться в http."""
-    from webapp.proxy_utils import proxy_url
+    from proxy_utils import proxy_url
 
     # без схемы — http по умолчанию
     assert proxy_url("user:pass@1.2.3.4:8000") == "http://user:pass@1.2.3.4:8000"
@@ -304,6 +304,26 @@ def test_proxy_schemes():
     assert ServerProxy("socks5h://u:p@1.2.3.4:1080").get_httpx_proxy() == "socks5h://u:p@1.2.3.4:1080"
     assert ServerProxy("u:p@1.2.3.4:8000").get_httpx_proxy() == "http://u:p@1.2.3.4:8000"
     print("✓ схемы прокси (http / socks5)")
+
+
+def test_telegram_proxy_schemes():
+    """Из России Telegram недоступен — уведомления должны уметь ходить через socks5."""
+    from integrations.notifications.telegram import TelegramNotifier
+
+    socks = TelegramNotifier.get_proxy("socks5://user:pass@1.2.3.4:1080")
+    assert socks["https"] == "socks5h://user:pass@1.2.3.4:1080", socks
+    assert socks["http"] == socks["https"]
+
+    http = TelegramNotifier.get_proxy("user:pass@1.2.3.4:8000")
+    assert http["https"] == "http://user:pass@1.2.3.4:8000", http
+
+    assert TelegramNotifier.get_proxy("") is None
+    assert TelegramNotifier.get_proxy(None) is None
+
+    # прокси доезжает до самого отправителя
+    notifier = TelegramNotifier(bot_token="t", chat_id="1", proxy="socks5://1.2.3.4:1080")
+    assert notifier.proxy["https"] == "socks5h://1.2.3.4:1080"
+    print("✓ прокси для Telegram (socks5 / http)")
 
 
 def test_proxy_refusal_detected():

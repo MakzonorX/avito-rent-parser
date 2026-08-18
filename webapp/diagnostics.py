@@ -5,7 +5,7 @@
 from curl_cffi import requests
 from loguru import logger
 
-from webapp.proxy_utils import proxy_url
+from proxy_utils import proxy_url
 
 IP_INFO_URL = "https://ipinfo.io/json"
 AVITO_PROBE_URL = "https://www.avito.ru/tyumen"

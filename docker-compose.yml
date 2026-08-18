@@ -13,5 +13,9 @@ services:
     volumes:
       # Настройки, cookies, найденные объявления и логи переживают перезапуск
       - ./data:/app/data
+    # Чтобы контейнер дотянулся до SOCKS5-туннеля на хосте
+    # (scripts/telegram-tunnel.sh — обход блокировки Telegram с российских серверов)
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       - TZ=Asia/Yekaterinburg

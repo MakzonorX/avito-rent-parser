@@ -4,6 +4,7 @@ curl_cffi
 loguru==0.7.0
 pydantic==2.9.2
 requests==2.32.3
+PySocks==1.7.1        # socks5-прокси для Telegram
 tomli_w==1.2.0
 tzdata==2025.2
 tzlocal==5.3.1

@@ -2,6 +2,7 @@ import requests
 from loguru import logger
 
 from integrations.notifications.base import Notifier
+from proxy_utils import proxy_url
 from integrations.notifications.transport import send_with_retries
 from integrations.notifications.utils import get_first_image
 from models import Item
@@ -16,12 +17,14 @@ class TelegramNotifier(Notifier):
 
     @staticmethod
     def get_proxy(proxy: str = None):
-        if proxy:
-            return {
-            'http': f'http://{proxy}',
-            'https': f'http://{proxy}'
-        }
-        return None
+        """
+        Прокси для api.telegram.org. Из России Telegram недоступен, поэтому
+        сюда обычно прописывают зарубежный выход: socks5://host:port или http://...
+        """
+        url = proxy_url(proxy)
+        if not url:
+            return None
+        return {"http": url, "https": url}
 
     def notify_message(self, message: str):
         def _send():
