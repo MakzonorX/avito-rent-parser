@@ -1,0 +1,57 @@
+[avito]
+urls = [
+    "https://www.avito.ru/tyumen/kvartiry/sdam/na_dlitelnyy_srok-ASgBAgICAkSSA8gQ8AeQUg?cd=1&s=104",
+]
+count = 1
+tg_token = ""
+tg_chat_id = []
+vk_token = ""
+vk_user_id = []
+keys_word_white_list = []
+keys_word_black_list = [
+    "посуточно",
+    "на сутки",
+    "койко-место",
+]
+seller_black_list = []
+max_price = 60000
+min_price = 0
+geo = ""
+proxy_string = ""
+proxy_change_url = ""
+pause_general = 300
+pause_between_links = 5
+max_age = 86400
+max_count_of_retry = 5
+ignore_reserv = true
+ignore_promotion = false
+one_time_start = false
+one_file_for_link = false
+parse_views = false
+save_xlsx = false
+use_webdriver = false
+use_bypass_api = false
+cookies_api_key = ""
+use_own_cookies = false
+parse_phone = false
+proxy_notifier = ""
+tg_only_text = false
+retry_delay = 5
+timeout = 20
+block_threshold = 3
+
+[rent]
+rooms = []
+min_area = 0
+max_area = 0
+min_floor = 0
+max_floor = 0
+exclude_first_floor = false
+exclude_last_floor = false
+exclude_daily = true
+require_photo = false
+address_include = []
+address_exclude = []
+first_run_silent = true
+send_photos = true
+max_photos = 6

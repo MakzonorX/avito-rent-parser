@@ -1,2 +1,12 @@
 # created by virtualenv automatically
 .secret.txt
+
+# локальное окружение и данные
+.venv/
+storage/
+database.db
+config.toml
+result/
+__pycache__/
+*.pyc
+logs/

@@ -1,0 +1,208 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Аренда квартир · Тюмень</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏠</text></svg>">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand">
+    <span class="logo">🏠</span>
+    <div>
+      <h1>Аренда квартир · Тюмень</h1>
+      <div class="subtitle">парсер Avito с уведомлениями в Telegram</div>
+    </div>
+  </div>
+  <div class="controls">
+    <span id="status-badge" class="badge badge-stopped">остановлен</span>
+    <button id="btn-start" class="btn btn-primary">▶ Запустить</button>
+    <button id="btn-stop" class="btn btn-danger hidden">⏹ Остановить</button>
+    <button id="btn-check" class="btn">🔄 Проверить сейчас</button>
+  </div>
+</header>
+
+<nav class="tabs">
+  <button class="tab active" data-tab="dashboard">Дашборд</button>
+  <button class="tab" data-tab="settings">Настройки</button>
+  <button class="tab" data-tab="ads">Объявления</button>
+  <button class="tab" data-tab="logs">Логи</button>
+</nav>
+
+<main>
+  <!-- ============ ДАШБОРД ============ -->
+  <section id="tab-dashboard" class="tab-panel active">
+    <div id="alert-box"></div>
+
+    <div class="cards">
+      <div class="card"><div class="card-label">Состояние</div><div class="card-value" id="st-state">—</div><div class="card-note" id="st-uptime"></div></div>
+      <div class="card"><div class="card-label">Найдено за сессию</div><div class="card-value" id="st-session">0</div><div class="card-note">с момента запуска</div></div>
+      <div class="card"><div class="card-label">Найдено сегодня</div><div class="card-value" id="st-today">0</div><div class="card-note" id="st-total"></div></div>
+      <div class="card"><div class="card-label">Проверок сделано</div><div class="card-value" id="st-cycles">0</div><div class="card-note" id="st-next"></div></div>
+      <div class="card"><div class="card-label">Запросы к Avito</div><div class="card-value" id="st-requests">0 / 0</div><div class="card-note">успешные / неудачные</div></div>
+      <div class="card"><div class="card-label">Средняя цена</div><div class="card-value" id="st-avg">—</div><div class="card-note">по найденным</div></div>
+    </div>
+
+    <div class="panel">
+      <h2>Последние находки</h2>
+      <div id="recent-ads" class="ads-grid"></div>
+    </div>
+  </section>
+
+  <!-- ============ НАСТРОЙКИ ============ -->
+  <section id="tab-settings" class="tab-panel">
+    <div class="settings-actions">
+      <button id="btn-save" class="btn btn-primary">💾 Сохранить настройки</button>
+      <span id="save-hint" class="hint"></span>
+    </div>
+
+    <div class="panel">
+      <h2>Что отслеживаем</h2>
+      <div class="field">
+        <label>Готовые ссылки</label>
+        <select id="preset-select"><option value="">— выбрать шаблон —</option></select>
+        <div class="hint">Можно вставить свою ссылку: настрой поиск на avito.ru и скопируй адрес из строки браузера.</div>
+      </div>
+      <div class="field">
+        <label>Ссылки на поиск Avito <span class="hint">(по одной в строке)</span></label>
+        <textarea id="urls" rows="3" spellcheck="false"></textarea>
+      </div>
+      <div class="grid-3">
+        <div class="field"><label>Страниц на ссылку</label><input type="number" id="count" min="1" max="10"></div>
+        <div class="field"><label>Пауза между проверками, сек</label><input type="number" id="pause_general" min="30"></div>
+        <div class="field"><label>Не старше, часов <span class="hint">(0 = любые)</span></label><input type="number" id="max_age_hours" min="0"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Параметры квартиры</h2>
+      <div class="grid-2">
+        <div class="field"><label>Цена от, ₽/мес</label><input type="number" id="min_price" min="0"></div>
+        <div class="field"><label>Цена до, ₽/мес</label><input type="number" id="max_price" min="0"></div>
+      </div>
+      <div class="field">
+        <label>Комнатность</label>
+        <div class="checks" id="rooms-checks">
+          <label><input type="checkbox" value="0"> Студия</label>
+          <label><input type="checkbox" value="1"> 1-комн.</label>
+          <label><input type="checkbox" value="2"> 2-комн.</label>
+          <label><input type="checkbox" value="3"> 3-комн.</label>
+          <label><input type="checkbox" value="4"> 4-комн.</label>
+          <label><input type="checkbox" value="-1"> Комната</label>
+        </div>
+        <div class="hint">Ничего не отмечено — подходит любая.</div>
+      </div>
+      <div class="grid-4">
+        <div class="field"><label>Площадь от, м²</label><input type="number" id="min_area" min="0" step="0.5"></div>
+        <div class="field"><label>Площадь до, м²</label><input type="number" id="max_area" min="0" step="0.5"></div>
+        <div class="field"><label>Этаж от</label><input type="number" id="min_floor" min="0"></div>
+        <div class="field"><label>Этаж до</label><input type="number" id="max_floor" min="0"></div>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="exclude_first_floor"> Не первый этаж</label>
+        <label><input type="checkbox" id="exclude_last_floor"> Не последний этаж</label>
+        <label><input type="checkbox" id="exclude_daily"> Убрать посуточную аренду</label>
+        <label><input type="checkbox" id="require_photo"> Только с фото</label>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Адрес и слова</h2>
+      <div class="grid-2">
+        <div class="field"><label>Показывать только эти районы/улицы <span class="hint">(по одному в строке)</span></label><textarea id="address_include" rows="3"></textarea></div>
+        <div class="field"><label>Исключить районы/улицы</label><textarea id="address_exclude" rows="3"></textarea></div>
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>Обязательные слова <span class="hint">(есть хотя бы одно)</span></label><textarea id="keys_word_white_list" rows="3"></textarea></div>
+        <div class="field"><label>Стоп-слова <span class="hint">(объявление отбрасывается)</span></label><textarea id="keys_word_black_list" rows="3"></textarea></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Telegram</h2>
+      <div class="grid-2">
+        <div class="field">
+          <label>Токен бота</label>
+          <input type="text" id="tg_token" placeholder="123456789:AAE..." spellcheck="false">
+          <div class="hint">Получить у <a href="https://t.me/BotFather" target="_blank">@BotFather</a></div>
+        </div>
+        <div class="field">
+          <label>Chat ID <span class="hint">(по одному в строке)</span></label>
+          <textarea id="tg_chat_id" rows="2" spellcheck="false"></textarea>
+          <div class="hint">Свой ID узнать у <a href="https://t.me/userinfobot" target="_blank">@userinfobot</a>. Не забудь написать боту первым.</div>
+        </div>
+      </div>
+      <div class="grid-3">
+        <div class="field"><label>Фото в сообщении</label><input type="number" id="max_photos" min="1" max="10"></div>
+        <div class="field"><label>Прокси для Telegram <span class="hint">(если TG заблокирован)</span></label><input type="text" id="proxy_notifier" placeholder="user:pass@ip:port"></div>
+        <div class="field checks-field">
+          <div class="checks">
+            <label><input type="checkbox" id="send_photos"> Слать фото</label>
+            <label><input type="checkbox" id="tg_only_text"> Только текст</label>
+          </div>
+        </div>
+      </div>
+      <div class="checks">
+        <label><input type="checkbox" id="first_run_silent"> Первый запуск молча <span class="hint">— запомнить текущие объявления и не слать их пачкой</span></label>
+      </div>
+      <button id="btn-tg-test" class="btn">📨 Отправить тестовое сообщение</button>
+    </div>
+
+    <div class="panel">
+      <h2>Доступ к Avito</h2>
+      <div class="notice">
+        Avito пускает только российские IP. Через VPN/зарубежный сервер запросы блокируются —
+        отключи VPN для avito.ru или укажи российский прокси.
+      </div>
+      <div class="grid-2">
+        <div class="field"><label>Прокси <span class="hint">ip:port@user:pass</span></label><input type="text" id="proxy_string" spellcheck="false"></div>
+        <div class="field"><label>Ссылка смены IP <span class="hint">(для мобильных прокси)</span></label><input type="text" id="proxy_change_url" spellcheck="false"></div>
+      </div>
+      <div class="grid-4">
+        <div class="field"><label>Таймаут, сек</label><input type="number" id="timeout" min="5"></div>
+        <div class="field"><label>Повторов при ошибке</label><input type="number" id="max_count_of_retry" min="1"></div>
+        <div class="field"><label>Пауза между ссылками, сек</label><input type="number" id="pause_between_links" min="1"></div>
+        <div class="field"><label>Порог блокировок</label><input type="number" id="block_threshold" min="1"></div>
+      </div>
+
+      <h3>Cookies</h3>
+      <div id="cookies-status" class="cookie-status">—</div>
+      <div class="checks">
+        <label><input type="checkbox" id="use_own_cookies"> Использовать сохранённые cookies</label>
+      </div>
+      <div class="row-actions">
+        <button id="btn-cookies-refresh" class="btn">🍪 Получить автоматически</button>
+      </div>
+      <div class="field">
+        <label>Либо вставить вручную <span class="hint">(DevTools → Application → Cookies, или document.cookie)</span></label>
+        <textarea id="cookies-raw" rows="3" placeholder="ft=...; sessid=...; _avisc=..." spellcheck="false"></textarea>
+        <button id="btn-cookies-import" class="btn">Импортировать cookies</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ ОБЪЯВЛЕНИЯ ============ -->
+  <section id="tab-ads" class="tab-panel">
+    <div class="settings-actions">
+      <input type="search" id="ads-search" placeholder="Поиск по названию, адресу, описанию...">
+      <button id="btn-ads-clear" class="btn btn-danger-ghost">Очистить историю</button>
+    </div>
+    <div id="ads-list" class="ads-grid"></div>
+  </section>
+
+  <!-- ============ ЛОГИ ============ -->
+  <section id="tab-logs" class="tab-panel">
+    <div class="settings-actions">
+      <label class="checks"><input type="checkbox" id="logs-autoscroll" checked> Автопрокрутка</label>
+      <button id="btn-logs-clear" class="btn btn-danger-ghost">Очистить</button>
+    </div>
+    <pre id="logs-box" class="logs"></pre>
+  </section>
+</main>
+
+<div id="toast" class="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
