@@ -273,14 +273,48 @@ def test_proxy_normalization():
         "1.2.3.4:8000@user:pass",
         "1.2.3.4:8000:user:pass",
         "user:pass:1.2.3.4:8000",
-        "http://user:pass@1.2.3.4:8000",
         "  user:pass@1.2.3.4:8000  ",
     ]:
         assert normalize_proxy(raw) == expected, f"{raw} → {normalize_proxy(raw)}"
 
+    # явно указанная схема сохраняется
+    assert normalize_proxy("http://user:pass@1.2.3.4:8000") == "http://user:pass@1.2.3.4:8000"
+
     assert normalize_proxy("1.2.3.4:8000") == "1.2.3.4:8000", "прокси без авторизации"
     assert normalize_proxy("") == ""
     print("✓ нормализация прокси")
+
+
+def test_proxy_schemes():
+    """SOCKS5-прокси должен сохранять свою схему, а не превращаться в http."""
+    from webapp.proxy_utils import proxy_url
+
+    # без схемы — http по умолчанию
+    assert proxy_url("user:pass@1.2.3.4:8000") == "http://user:pass@1.2.3.4:8000"
+    assert proxy_url("1.2.3.4:8000:user:pass") == "http://user:pass@1.2.3.4:8000"
+
+    # socks5 повышается до socks5h, чтобы DNS резолвился на стороне прокси
+    assert proxy_url("socks5://user:pass@1.2.3.4:1080") == "socks5h://user:pass@1.2.3.4:1080"
+    assert proxy_url("socks5h://user:pass@1.2.3.4:1080") == "socks5h://user:pass@1.2.3.4:1080"
+    assert proxy_url("SOCKS5://1.2.3.4:1080") == "socks5h://1.2.3.4:1080"
+    assert proxy_url("") == ""
+
+    # движок парсера не должен приклеивать http:// к уже готовой схеме
+    from parser.proxies.proxy import ServerProxy
+    assert ServerProxy("socks5h://u:p@1.2.3.4:1080").get_httpx_proxy() == "socks5h://u:p@1.2.3.4:1080"
+    assert ServerProxy("u:p@1.2.3.4:8000").get_httpx_proxy() == "http://u:p@1.2.3.4:8000"
+    print("✓ схемы прокси (http / socks5)")
+
+
+def test_proxy_refusal_detected():
+    """Отказ прокси нужно отличать от блокировки со стороны Avito."""
+    from webapp.diagnostics import _proxy_refused
+
+    assert _proxy_refused("Failed to perform, curl: (7) CONNECT tunnel failed, response 403")
+    assert _proxy_refused("Failed to perform, curl: (56) Proxy CONNECT aborted")
+    assert _proxy_refused("Can't complete SOCKS5 connection to www.avito.ru")
+    assert not _proxy_refused("Connection timed out after 20000 milliseconds")
+    print("✓ распознавание отказа прокси")
 
 
 def test_onboarding_flag_persists():

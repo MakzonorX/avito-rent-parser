@@ -158,7 +158,7 @@
         отключи VPN для avito.ru или укажи российский прокси.
       </div>
       <div class="grid-2">
-        <div class="field"><label>Прокси <span class="hint">ip:port@user:pass</span></label><input type="text" id="proxy_string" spellcheck="false"></div>
+        <div class="field"><label>Прокси <span class="hint">user:pass@ip:port · SOCKS5: socks5://user:pass@ip:port</span></label><input type="text" id="proxy_string" spellcheck="false"></div>
         <div class="field"><label>Ссылка смены IP <span class="hint">(для мобильных прокси)</span></label><input type="text" id="proxy_change_url" spellcheck="false"></div>
       </div>
       <div class="grid-4">
@@ -272,7 +272,7 @@
       </p>
       <div id="wz-avito-result" class="wizard-result"></div>
       <div class="field hidden" id="wz-proxy-field">
-        <label>Российский прокси <span class="hint">user:pass@ip:port — формат распознаётся автоматически</span></label>
+        <label>Российский прокси <span class="hint">user:pass@ip:port · для SOCKS5 добавь socks5:// в начало</span></label>
         <input type="text" id="wz_proxy_string" placeholder="user:pass@1.2.3.4:8000" spellcheck="false">
       </div>
       <div class="wizard-actions">
