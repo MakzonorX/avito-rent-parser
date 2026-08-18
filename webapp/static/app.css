@@ -218,3 +218,27 @@ textarea { resize: vertical; font-family: ui-monospace, "SF Mono", Menlo, monosp
 .wizard-summary-row { display: flex; justify-content: space-between; gap: 16px; font-size: 13.5px; padding-bottom: 9px; border-bottom: 1px solid var(--border); }
 .wizard-summary-row span:first-child { color: var(--text-dim); }
 .wizard-summary-row span:last-child { text-align: right; }
+
+/* ---------- сессия браузера и подсказки ---------- */
+.info {
+  background: rgba(77,141,255,.08); border: 1px solid rgba(77,141,255,.25);
+  color: #c3d8ff; padding: 12px 15px; border-radius: 8px; margin-bottom: 14px; font-size: 13px;
+}
+.advanced { margin-top: 18px; border-top: 1px solid var(--border); padding-top: 14px; }
+.advanced summary { cursor: pointer; color: var(--text-dim); font-size: 13px; list-style: none; }
+.advanced summary::before { content: "▸ "; }
+.advanced[open] summary::before { content: "▾ "; }
+.advanced summary:hover { color: var(--text); }
+.advanced > *:not(summary) { margin-top: 12px; }
+
+.profiles { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+.profile-row {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: var(--bg-input); border: 1px solid var(--border);
+  border-radius: 8px; padding: 10px 13px; font-size: 13px;
+}
+.profile-row.good { border-color: rgba(46,204,113,.4); }
+.profile-name b { display: block; }
+.profile-name span { color: var(--text-dim); font-size: 12px; }
+.wizard-cookies { margin: 14px 0; }
+.wizard-cookies .btn { width: 100%; }

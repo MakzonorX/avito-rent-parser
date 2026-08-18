@@ -37,9 +37,48 @@ CLIENT_HINTS = {
 _state = {"running": False, "result": None, "error": None}
 
 
-def fingerprint() -> dict:
-    """Профиль браузера, с которым были получены cookies."""
-    return {"impersonate": IMPERSONATE, "headers": dict(CLIENT_HINTS)}
+# Профили, которые умеет подделывать curl_cffi (мажорная версия Chrome)
+AVAILABLE_CHROME_PROFILES = [99, 100, 101, 104, 107, 110, 116, 119, 120, 123, 124, 131, 133, 136, 142, 145, 146]
+
+
+def _chrome_major(user_agent: str) -> int | None:
+    import re
+    match = re.search(r"Chrome/(\d+)", user_agent or "")
+    return int(match.group(1)) if match else None
+
+
+def fingerprint(user_agent: str = "") -> dict:
+    """
+    Профиль браузера, с которым были получены cookies.
+
+    Avito сверяет cookie ft с отпечатком, поэтому impersonate и client hints
+    подбираются под ту же версию Chrome, что и в User-Agent.
+    """
+    user_agent = (user_agent or "").strip()
+    if not user_agent:
+        return {"impersonate": IMPERSONATE, "headers": dict(CLIENT_HINTS)}
+
+    major = _chrome_major(user_agent)
+    if not major:
+        # не Chrome — оставляем свой отпечаток, но с чужим UA он вряд ли поможет
+        return {"impersonate": IMPERSONATE, "headers": {**CLIENT_HINTS, "user-agent": user_agent}}
+
+    # ближайший профиль не старше версии браузера
+    suitable = [v for v in AVAILABLE_CHROME_PROFILES if v <= major] or AVAILABLE_CHROME_PROFILES[:1]
+    version = suitable[-1]
+    impersonate = f"chrome{version}" + ("a" if version == 133 else "")
+
+    is_mobile = "Mobile" in user_agent
+    platform = '"Android"' if is_mobile else ('"macOS"' if "Mac OS" in user_agent else '"Windows"')
+
+    headers = {
+        "user-agent": user_agent,
+        "sec-ch-ua": f'"Chromium";v="{major}", "Google Chrome";v="{major}", "Not.A/Brand";v="99"',
+        "sec-ch-ua-mobile": "?1" if is_mobile else "?0",
+        "sec-ch-ua-platform": platform,
+        "accept-language": CLIENT_HINTS["accept-language"],
+    }
+    return {"impersonate": impersonate, "headers": headers}
 
 
 def status() -> dict:
@@ -73,10 +112,11 @@ def status() -> dict:
 
 def save_cookies(cookies: dict, user_agent: str = USER_AGENT) -> int:
     COOKIES_PATH.parent.mkdir(parents=True, exist_ok=True)
+    user_agent = (user_agent or "").strip() or USER_AGENT
     payload = {
         "cookies": cookies,
         "user_agent": user_agent,
-        "fingerprint": fingerprint(),
+        "fingerprint": fingerprint(user_agent),
         "saved_at": time.time(),
         "cookie_count": len(cookies),
     }
@@ -85,6 +125,39 @@ def save_cookies(cookies: dict, user_agent: str = USER_AGENT) -> int:
     temp_path.replace(COOKIES_PATH)
     logger.info(f"💾 Сохранено cookies: {len(cookies)} (ft: {'да' if 'ft' in cookies else 'нет'})")
     return len(cookies)
+
+
+def load_cookies() -> dict:
+    """Сохранённая сессия: {'cookies': {...}, 'user_agent': ...} или пусто."""
+    if not COOKIES_PATH.exists():
+        return {}
+    try:
+        data = json.loads(COOKIES_PATH.read_text(encoding="utf-8"))
+        return data if data.get("cookies") else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def merge_cookies(new_jar: dict, user_agent: str = "") -> int:
+    """
+    Дополняет сохранённую сессию свежими значениями.
+
+    Свежая сессия из чистого браузера беднее импортированной из рабочего
+    профиля, поэтому просто перезаписывать нельзя — потеряется ключевая ft.
+    """
+    if not new_jar:
+        return 0
+
+    saved = load_cookies()
+    saved_jar = saved.get("cookies") or {}
+
+    if saved_jar.get("ft") and "ft" not in new_jar:
+        merged = {**saved_jar, **new_jar, "ft": saved_jar["ft"]}
+        logger.debug("Сохраняю ft из импортированной сессии — в браузере её нет")
+    else:
+        merged = {**saved_jar, **new_jar}
+
+    return save_cookies(merged, user_agent=user_agent or saved.get("user_agent", ""))
 
 
 def parse_cookie_string(raw: str) -> dict:

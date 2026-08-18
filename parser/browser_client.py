@@ -87,12 +87,18 @@ class BrowserHttpClient:
         timeout: int = 60,
         on_cookies=None,
         profile_dir: str = "storage/browser_profile",
+        cookies: dict | None = None,
+        user_agent: str = "",
     ):
         self.proxy_string = proxy_string
         self.headless = headless
         self.timeout = timeout
         self.on_cookies = on_cookies
         self.profile_dir = Path(profile_dir)
+        # Сессия, импортированная из браузера пользователя: без неё Avito
+        # встречает нас как гостя в инкогнито и отдаёт 429
+        self.cookies = cookies or {}
+        self.user_agent = user_agent or USER_AGENT
         self._lock = threading.Lock()
         self._playwright = None
         self._browser = None
@@ -119,7 +125,7 @@ class BrowserHttpClient:
             "user_data_dir": str(self.profile_dir),
             "headless": self.headless,
             "chromium_sandbox": False,
-            "user_agent": USER_AGENT,
+            "user_agent": self.user_agent,
             "viewport": {"width": 1920, "height": 1080},
             "locale": "ru-RU",
             "timezone_id": "Asia/Yekaterinburg",
@@ -141,6 +147,8 @@ class BrowserHttpClient:
             "Object.defineProperty(navigator,'languages',{get:()=>['ru-RU','ru']});"
             "Object.defineProperty(navigator,'plugins',{get:()=>[1,2,3,4,5]});"
         )
+        self._seed_cookies()
+
         self._page = self._context.pages[0] if self._context.pages else self._context.new_page()
         self._page.goto("https://www.avito.ru/", timeout=self.timeout * 1000,
                         wait_until="domcontentloaded")
@@ -151,6 +159,22 @@ class BrowserHttpClient:
             raise RuntimeError("Avito блокирует этот IP-адрес даже в браузере")
 
         self._harvest_cookies()
+
+    def _seed_cookies(self) -> None:
+        """Подкладывает браузеру сессию пользователя до первого запроса."""
+        if not self.cookies:
+            return
+        try:
+            self._context.add_cookies([
+                {"name": name, "value": value, "domain": ".avito.ru", "path": "/"}
+                for name, value in self.cookies.items()
+            ])
+            logger.info(
+                f"Браузеру передана сохранённая сессия: {len(self.cookies)} записей "
+                f"(ft: {'да' if 'ft' in self.cookies else 'нет'})"
+            )
+        except Exception as err:
+            logger.warning(f"Не удалось передать сессию браузеру: {err}")
 
     def _harvest_cookies(self) -> None:
         """Отдаём накопленные браузером cookies наружу — пригодятся быстрому клиенту."""

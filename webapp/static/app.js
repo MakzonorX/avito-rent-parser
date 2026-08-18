@@ -248,10 +248,59 @@ $('btn-cookies-import').onclick = async () => {
   if (!raw) return toast('Вставь строку cookies', 'error');
   const { ok, data } = await api('/api/cookies/import', {
     method: 'POST',
-    body: JSON.stringify({ cookies: raw }),
+    body: JSON.stringify({ cookies: raw, user_agent: navigator.userAgent }),
   });
   toast(data.message, ok ? 'success' : 'error');
   if (ok) { $('cookies-raw').value = ''; refreshStatus(); }
+};
+
+/* --- импорт сессии из браузера пользователя --- */
+// navigator.userAgent отправляется вместе с запросом: админку открыл тот же
+// браузер, которому Avito выдал сессию, поэтому отпечаток совпадёт
+async function importFromBrowser(profileKey = '') {
+  return api('/api/cookies/from-browser', {
+    method: 'POST',
+    body: JSON.stringify({ profile_key: profileKey, user_agent: navigator.userAgent }),
+  });
+}
+
+$('btn-cookies-browser').onclick = async () => {
+  toast('Читаю браузер...');
+  const { ok, data } = await importFromBrowser();
+  toast(data.message, ok ? 'success' : 'error');
+  refreshStatus();
+  loadSettings();
+};
+
+$('btn-cookies-scan').onclick = async () => {
+  const box = $('browser-profiles');
+  box.innerHTML = '<div class="hint">Смотрю установленные браузеры...</div>';
+  const { data } = await api('/api/cookies/browsers');
+  const profiles = data.profiles || [];
+
+  if (!profiles.length) {
+    box.innerHTML = '<div class="hint">Браузеров с сохранёнными данными Avito не нашлось. '
+      + 'Открой avito.ru в обычном окне браузера и нажми ещё раз.</div>';
+    return;
+  }
+
+  box.innerHTML = profiles.map((p) => `
+    <div class="profile-row ${p.has_ft ? 'good' : ''}">
+      <div class="profile-name">
+        <b>${escapeHtml(p.browser)} · ${escapeHtml(p.profile)}</b>
+        <span>${p.count} записей${p.has_ft ? ' · ключевая ft на месте ✓' : ' · без ключевой ft'}</span>
+      </div>
+      <button class="btn" data-profile="${escapeHtml(p.key)}">Взять отсюда</button>
+    </div>`).join('');
+
+  box.querySelectorAll('[data-profile]').forEach((btn) => {
+    btn.onclick = async () => {
+      const { ok, data } = await importFromBrowser(btn.dataset.profile);
+      toast(data.message, ok ? 'success' : 'error');
+      refreshStatus();
+      loadSettings();
+    };
+  });
 };
 
 /* ------------------------------------------------ объявления */
@@ -527,8 +576,21 @@ $('wz-avito-check').onclick = async () => {
   } else {
     wizard.result('wz-avito-result', 'fail', `❌ ${escapeHtml(data.message)}`,
       `${escapeHtml(where)}<br><br>${escapeHtml(data.hint)}`);
+    // блокировка при живом браузере лечится импортом сессии — предлагаем сразу
+    $('wz-cookies-block').classList.remove('hidden');
     $('wz-proxy-field').classList.remove('hidden');
   }
+};
+
+$('wz-cookies-browser').onclick = async () => {
+  wizard.result('wz-cookies-result', '', 'Читаю браузер...');
+  const { ok, data } = await importFromBrowser();
+  if (!ok) {
+    wizard.result('wz-cookies-result', 'fail', '❌ Не получилось', escapeHtml(data.message));
+    return;
+  }
+  wizard.result('wz-cookies-result', 'ok', '✅ Сессия взята',
+    `${escapeHtml(data.message)}<br>Нажми «Проверить доступ» ещё раз.`);
 };
 
 /* --- финиш --- */

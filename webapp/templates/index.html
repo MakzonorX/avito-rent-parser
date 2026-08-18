@@ -180,19 +180,34 @@
         <div class="field"><label>Порог блокировок</label><input type="number" id="block_threshold" min="1"></div>
       </div>
 
-      <h3>Cookies</h3>
+      <h3>Cookies браузера</h3>
+      <div class="info">
+        Avito пускает тот браузер, где уже есть живая сессия — поэтому в инкогнито он ругается
+        на IP, а в обычном окне работает. Забери данные сессии из своего браузера,
+        и парсер будет ходить так же, как ты сам.
+      </div>
       <div id="cookies-status" class="cookie-status">—</div>
-      <div class="checks">
-        <label><input type="checkbox" id="use_own_cookies"> Использовать сохранённые cookies</label>
-      </div>
       <div class="row-actions">
-        <button id="btn-cookies-refresh" class="btn">🍪 Получить автоматически</button>
+        <button id="btn-cookies-browser" class="btn btn-primary">🍪 Взять из браузера</button>
+        <button id="btn-cookies-scan" class="btn">Показать профили</button>
       </div>
-      <div class="field">
-        <label>Либо вставить вручную <span class="hint">(DevTools → Application → Cookies, или document.cookie)</span></label>
-        <textarea id="cookies-raw" rows="3" placeholder="ft=...; sessid=...; _avisc=..." spellcheck="false"></textarea>
-        <button id="btn-cookies-import" class="btn">Импортировать cookies</button>
+      <div id="browser-profiles" class="profiles"></div>
+      <div class="checks">
+        <label><input type="checkbox" id="use_own_cookies"> Использовать сохранённую сессию</label>
       </div>
+
+      <details class="advanced">
+        <summary>Другие способы</summary>
+        <div class="row-actions">
+          <button id="btn-cookies-refresh" class="btn">Получить отдельным браузером</button>
+        </div>
+        <div class="hint">Откроет свой headless-браузер и попробует получить сессию с нуля. Помогает реже, чем импорт из своего браузера.</div>
+        <div class="field" style="margin-top:14px">
+          <label>Вставить вручную <span class="hint">(DevTools → Application → Cookies, либо document.cookie в консоли)</span></label>
+          <textarea id="cookies-raw" rows="3" placeholder="ft=...; sessid=...; _avisc=..." spellcheck="false"></textarea>
+          <button id="btn-cookies-import" class="btn">Импортировать вставленное</button>
+        </div>
+      </details>
     </div>
   </section>
 
@@ -283,6 +298,14 @@
         Avito пускает только российские IP-адреса. Проверим, что видит Avito с твоей стороны.
       </p>
       <div id="wz-avito-result" class="wizard-result"></div>
+      <div class="wizard-cookies hidden" id="wz-cookies-block">
+        <div class="info">
+          Если в обычном окне браузера Avito открывается, а здесь блокирует — забери
+          сессию из своего браузера, это чаще всего и решает вопрос.
+        </div>
+        <button id="wz-cookies-browser" class="btn btn-primary">🍪 Взять из браузера</button>
+        <div id="wz-cookies-result" class="wizard-result"></div>
+      </div>
       <div class="field hidden" id="wz-proxy-field">
         <label>Российский прокси <span class="hint">user:pass@ip:port · для SOCKS5 добавь socks5:// в начало</span></label>
         <input type="text" id="wz_proxy_string" placeholder="user:pass@1.2.3.4:8000" spellcheck="false">

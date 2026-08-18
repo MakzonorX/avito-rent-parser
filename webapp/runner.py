@@ -97,7 +97,8 @@ class ParserRunner:
     def _store_browser_cookies(self, jar: dict, user_agent: str) -> None:
         """Cookies, добытые браузером, переиспользует быстрый клиент."""
         try:
-            cookies_tool.save_cookies(jar, user_agent=user_agent)
+            # именно merge: сессия из чистого браузера беднее импортированной
+            cookies_tool.merge_cookies(jar, user_agent=user_agent)
             raw = settings.load_raw()
             if not raw["avito"].get("use_own_cookies"):
                 settings.save(avito={"use_own_cookies": True}, rent={})
@@ -111,11 +112,14 @@ class ParserRunner:
         parser = AvitoParse(config=avito_config, stop_event=self._stop_event)
         if use_browser:
             logger.info("Запросы пойдут через браузер")
+            saved = cookies_tool.load_cookies()
             parser.http = BrowserHttpClient(
                 proxy_string=avito_config.proxy_string or "",
                 headless=rent_config.browser_headless,
                 timeout=max(30, avito_config.timeout),
                 on_cookies=self._store_browser_cookies,
+                cookies=saved.get("cookies") or {},
+                user_agent=saved.get("user_agent") or "",
             )
         parser.ads_filter = RentAdsFilter(
             config=avito_config,

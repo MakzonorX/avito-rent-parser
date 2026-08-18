@@ -11,7 +11,7 @@ from loguru import logger
 
 from integrations.notifications.telegram_rent import RentTelegramNotifier
 from integrations.notifications.utils import escape_markdown_v2
-from webapp import cookies_tool, diagnostics, logbuf, settings, store
+from webapp import browser_cookies, cookies_tool, diagnostics, logbuf, settings, store
 from webapp.runner import runner
 
 BASE_DIR = Path(__file__).parent
@@ -169,10 +169,56 @@ def api_cookies_refresh():
 async def api_cookies_import(request: Request):
     payload = await request.json()
     try:
-        count = cookies_tool.import_from_string(payload.get("cookies", ""))
+        count = cookies_tool.import_from_string(
+            payload.get("cookies", ""), user_agent=payload.get("user_agent", "")
+        )
     except ValueError as err:
         return JSONResponse({"ok": False, "message": str(err)}, status_code=400)
+    _enable_own_cookies()
     return {"ok": True, "message": f"Импортировано {count} cookies"}
+
+
+def _enable_own_cookies() -> None:
+    """Импортировали cookies — значит их надо использовать."""
+    raw = settings.load_raw()
+    if not raw["avito"].get("use_own_cookies"):
+        settings.save(avito={"use_own_cookies": True}, rent={})
+        logger.info("Включено использование сохранённых cookies")
+
+
+@app.get("/api/cookies/browsers")
+def api_cookies_browsers():
+    """Список профилей браузеров с числом найденных cookies Avito."""
+    try:
+        return {"ok": True, "profiles": browser_cookies.scan()}
+    except Exception as err:
+        logger.error(f"Не удалось просмотреть браузеры: {err}")
+        return JSONResponse({"ok": False, "message": str(err), "profiles": []}, status_code=500)
+
+
+@app.post("/api/cookies/from-browser")
+async def api_cookies_from_browser(request: Request):
+    """
+    Забирает cookies Avito прямо из браузера пользователя.
+    User-Agent приходит со страницы админки — это тот же браузер,
+    поэтому отпечаток совпадёт с тем, которому Avito выдал cookies.
+    """
+    payload = await request.json() if await request.body() else {}
+    try:
+        result = browser_cookies.import_from(payload.get("profile_key", ""))
+    except Exception as err:
+        return JSONResponse({"ok": False, "message": str(err)}, status_code=400)
+
+    cookies = result["cookies"]
+    count = cookies_tool.save_cookies(cookies, user_agent=payload.get("user_agent", ""))
+    _enable_own_cookies()
+
+    has_ft = "ft" in cookies
+    message = (
+        f"Взято {count} cookies из «{result['browser']} / {result['profile']}»"
+        + (", ключевая ft на месте" if has_ft else ", но ключевой ft нет — открой avito.ru в браузере")
+    )
+    return {"ok": True, "message": message, "count": count, "has_ft": has_ft}
 
 
 # ---------------------------------------------------------------- мастер настройки
