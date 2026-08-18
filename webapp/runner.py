@@ -14,9 +14,10 @@ from integrations.notifications.base import Notifier
 from integrations.notifications.composite import CompositeNotifier, NullNotifier
 from integrations.notifications.telegram_rent import RentTelegramNotifier
 from models import Item
+from parser.browser_client import BrowserHttpClient
 from parser_cls import AvitoParse
 from rent.filter import RentAdsFilter
-from webapp import settings, store
+from webapp import cookies_tool, settings, store
 
 
 class StoreNotifier(Notifier):
@@ -49,6 +50,7 @@ class ParserRunner:
         self.found_in_session = 0
         self.good_requests = 0
         self.bad_requests = 0
+        self.used_browser = False
 
     # ---------- статус ----------
 
@@ -67,6 +69,7 @@ class ParserRunner:
             "found_in_session": self.found_in_session,
             "good_requests": self.good_requests,
             "bad_requests": self.bad_requests,
+            "used_browser": self.used_browser,
         }
 
     # ---------- сборка парсера ----------
@@ -91,8 +94,29 @@ class ParserRunner:
         notifiers.append(StoreNotifier(on_new=on_new))
         return CompositeNotifier(notifiers) if notifiers else NullNotifier()
 
-    def _build_parser(self, avito_config, rent_config, silent: bool = False) -> AvitoParse:
+    def _store_browser_cookies(self, jar: dict, user_agent: str) -> None:
+        """Cookies, добытые браузером, переиспользует быстрый клиент."""
+        try:
+            cookies_tool.save_cookies(jar, user_agent=user_agent)
+            raw = settings.load_raw()
+            if not raw["avito"].get("use_own_cookies"):
+                settings.save(avito={"use_own_cookies": True}, rent={})
+                logger.info("Включаю использование сохранённых cookies — их добыл браузер")
+        except Exception as err:
+            logger.debug(f"Не удалось сохранить cookies из браузера: {err}")
+
+    def _build_parser(
+        self, avito_config, rent_config, silent: bool = False, use_browser: bool = False
+    ) -> AvitoParse:
         parser = AvitoParse(config=avito_config, stop_event=self._stop_event)
+        if use_browser:
+            logger.info("Запросы пойдут через браузер")
+            parser.http = BrowserHttpClient(
+                proxy_string=avito_config.proxy_string or "",
+                headless=rent_config.browser_headless,
+                timeout=max(30, avito_config.timeout),
+                on_cookies=self._store_browser_cookies,
+            )
         parser.ads_filter = RentAdsFilter(
             config=avito_config,
             rent_config=rent_config,
@@ -135,6 +159,16 @@ class ParserRunner:
 
     def _count_found(self, ad: Item) -> None:
         self.found_in_session += 1
+
+    @staticmethod
+    def _close_http(parser) -> None:
+        """Закрывает браузер, если цикл ходил через него."""
+        client = getattr(parser, "http", None)
+        if hasattr(client, "close"):
+            try:
+                client.close()
+            except Exception as err:
+                logger.debug(f"Ошибка при закрытии браузера: {err}")
 
     # ---------- жизненный цикл ----------
 
@@ -218,17 +252,43 @@ class ParserRunner:
                     "В Telegram пойдут только те, что появятся дальше"
                 )
 
-            parser = self._build_parser(avito_config, rent_config, silent=silent)
-            parser.parse()
+            mode = (rent_config.fetch_mode or "auto").lower()
+            use_browser = mode == "browser"
+
+            parser = self._build_parser(
+                avito_config, rent_config, silent=silent, use_browser=use_browser
+            )
+            try:
+                parser.parse()
+                blocked = parser.bad_request_count and not parser.good_request_count
+
+                # обычный клиент упёрся в блокировку — повторяем браузером
+                if blocked and mode == "auto" and not use_browser and not self._stop_event.is_set():
+                    logger.warning(
+                        "Обычные запросы блокируются, повторяю цикл через браузер"
+                    )
+                    self._close_http(parser)
+                    parser = self._build_parser(
+                        avito_config, rent_config, silent=silent, use_browser=True
+                    )
+                    use_browser = True
+                    parser.parse()
+                    blocked = parser.bad_request_count and not parser.good_request_count
+            finally:
+                self._close_http(parser)
 
             self.good_requests = parser.good_request_count
             self.bad_requests = parser.bad_request_count
+            self.used_browser = use_browser
             self.cycles += 1
             self.last_cycle_at = datetime.now(timezone.utc)
             self.last_error = None
 
-            if parser.bad_request_count and not parser.good_request_count:
+            if blocked:
                 self.last_error = (
+                    "Avito блокирует запросы даже через браузер. Нужен российский IP: "
+                    "отключить VPN или указать российский прокси."
+                    if use_browser else
                     "Все запросы к Avito блокируются. Нужен российский IP "
                     "(отключить VPN / указать прокси) или свежие cookies."
                 )

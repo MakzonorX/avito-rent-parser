@@ -19,6 +19,10 @@ class OwnCookiesProvider(CookiesProvider):
 
         self.last_id: str | None = None  # Может пригодиться для совместимости
         self.last_cookies: dict | None = None
+        # Avito привязывает cookie ft к отпечатку браузера: с чужим User-Agent
+        # те же cookies получают 429/403, поэтому храним их вместе
+        self.user_agent: str | None = None
+        self.fingerprint: dict | None = None
 
         self.unblock_started_at: float | None = None
         self.UNBLOCK_TIMEOUT = 10  # секунд
@@ -44,6 +48,14 @@ class OwnCookiesProvider(CookiesProvider):
         if self.last_cookies:
             return self.last_cookies
         raise Exception("Нет собственных cookies")
+
+    def get_user_agent(self) -> str | None:
+        """User-Agent браузера, которым были получены cookies."""
+        return self.user_agent
+
+    def get_fingerprint(self) -> dict | None:
+        """Профиль curl_cffi (impersonate + заголовки) под тот же браузер."""
+        return self.fingerprint
 
     def update(self, response):
         """Обновляем куки, сохраняя существующие"""
@@ -132,9 +144,12 @@ class OwnCookiesProvider(CookiesProvider):
         try:
             data = json.loads(self.storage_path.read_text(encoding="utf-8"))
             self.last_cookies = data.get("cookies")
+            self.user_agent = data.get("user_agent")
+            self.fingerprint = data.get("fingerprint")
 
             if self.last_cookies:
-                logger.info(f"📂 Загружены собственные cookies с диска")
+                agent = "с отпечатком браузера" if self.user_agent else "без отпечатка (могут не сработать)"
+                logger.info(f"📂 Загружены собственные cookies с диска, {agent}")
             else:
                 logger.warning("Cookies файл есть, но нет cookies в нем")
 
@@ -152,6 +167,8 @@ class OwnCookiesProvider(CookiesProvider):
 
             payload = {
                 "cookies": self.last_cookies,
+                "user_agent": self.user_agent,
+                "fingerprint": self.fingerprint,
                 "saved_at": time.time(),
                 "cookie_count": len(self.last_cookies),
             }

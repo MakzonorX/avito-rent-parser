@@ -157,6 +157,18 @@
         Avito пускает только российские IP. Через VPN/зарубежный сервер запросы блокируются —
         отключи VPN для avito.ru или укажи российский прокси.
       </div>
+      <div class="field">
+        <label>Как ходить к Avito</label>
+        <select id="fetch_mode">
+          <option value="auto">Авто — обычные запросы, при блокировке браузер</option>
+          <option value="http">Только обычные запросы — быстро, но чаще блокируют</option>
+          <option value="browser">Всегда через браузер — медленнее, зато проходит</option>
+        </select>
+        <div class="hint">Браузер ходит так же, как ты сам: с настоящим отпечатком и cookies. Медленнее, но Avito его пускает.</div>
+        <div class="checks" style="margin-top:10px">
+          <label><input type="checkbox" id="browser_headless"> Прятать окно браузера <span class="hint">— на сервере без экрана обязательно</span></label>
+        </div>
+      </div>
       <div class="grid-2">
         <div class="field"><label>Прокси <span class="hint">user:pass@ip:port · SOCKS5: socks5://user:pass@ip:port</span></label><input type="text" id="proxy_string" spellcheck="false"></div>
         <div class="field"><label>Ссылка смены IP <span class="hint">(для мобильных прокси)</span></label><input type="text" id="proxy_change_url" spellcheck="false"></div>

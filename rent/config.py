@@ -16,6 +16,11 @@ class RentConfig:
     require_photo: bool = False  # только объявления с фото
     address_include: list[str] = field(default_factory=list)  # район/улица: показывать только эти
     address_exclude: list[str] = field(default_factory=list)
+    # Как ходить к Avito: auto — обычный клиент, при блокировке браузер;
+    # http — только обычный; browser — всегда через браузер
+    fetch_mode: str = "auto"
+    # Прятать окно браузера. На сервере без экрана — только true
+    browser_headless: bool = True
     # Первый запуск: запомнить текущие объявления молча, без потока уведомлений
     first_run_silent: bool = True
     # Телеграм

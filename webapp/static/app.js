@@ -79,6 +79,7 @@ async function refreshStatus() {
     ? `следующая ${inFuture(runner.next_cycle_at)}`
     : runner.last_cycle_at ? `последняя ${timeAgo(runner.last_cycle_at)}` : '';
   $('st-requests').textContent = `${runner.good_requests} / ${runner.bad_requests}`;
+  $('st-requests').nextElementSibling.textContent = runner.used_browser ? 'через браузер' : 'успешные / неудачные';
   $('st-avg').textContent = fmtMoney(stats.avg_price);
 
   $('alert-box').innerHTML = runner.last_error
@@ -162,6 +163,8 @@ async function loadSettings() {
   $('address_exclude').value = listToLines(rent.address_exclude);
   $('send_photos').checked = !!rent.send_photos;
   $('first_run_silent').checked = !!rent.first_run_silent;
+  $('fetch_mode').value = rent.fetch_mode || 'auto';
+  $('browser_headless').checked = rent.browser_headless !== false;
   $('max_photos').value = rent.max_photos;
 
   const rooms = (rent.rooms || []).map(Number);
@@ -217,6 +220,8 @@ $('btn-save').onclick = async () => {
       address_exclude: linesToList($('address_exclude').value),
       send_photos: $('send_photos').checked,
       first_run_silent: $('first_run_silent').checked,
+      fetch_mode: $('fetch_mode').value,
+      browser_headless: $('browser_headless').checked,
       max_photos: $('max_photos').value,
     },
   };
